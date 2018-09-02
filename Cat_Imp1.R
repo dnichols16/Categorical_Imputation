@@ -1,3 +1,5 @@
+
+library(tidyverse)
 set.seed(125)
 #**************************************
 cats <- rbinom(10000,1,.68)
@@ -45,9 +47,17 @@ df <- data.frame(n = n, prop = prop, missing = missing)
 #***************************************
 df <- df %>% mutate(acc = accuracy(n, prop, missing))
 
-
-
-
+acc <- as.numeric(0)
+miss <- seq(1000, 10000, 1000)
+#accuracy(10000, .80, 9800)
+for(i in seq_along(miss)) {
+  j = i * 1000
+  acc[i]<- accuracy(10000, 0.80, j)
+  print(i)
+  print(j)
+  append(acc, acc[i])
+}
+acc
 
 
 

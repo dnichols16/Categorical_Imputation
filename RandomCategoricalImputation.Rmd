@@ -1,0 +1,167 @@
+---
+title: "Random Categorical Imputation"
+author: "David P. Nichols, MD, MPH"
+date: "September 1, 2018"
+output: html_document
+---
+
+This post is an extension of my previous posts on random imputation:
+[Random Imputation](https://epi2020datascience.blogspot.com/2018/01/)
+[Random vs MICE Immputation](https://epi2020datascience.blogspot.com/2018/07/)
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+set.seed(125)
+```
+
+```{r, message = FALSE, warning = FALSE}
+cats <- rbinom(10000,1,.68)
+cats_all <- cats #save the original intact data - the counterfactuals
+```
+
+```{r, message = FALSE, warning = FALSE}
+missings <- round(runif(6000, 1, 10000))
+cats[missings] <- NA
+sum(is.na(cats)) # number of NA's in cats
+#cats now represents original data that
+#we would be presented with with missing values
+```
+
+```{r, message = FALSE, warning = FALSE}
+(tab1 <- xtabs(~cats))
+tab1[[1]]
+tab1[[2]]
+```
+
+```{r, message = FALSE, warning = FALSE}
+#the proportion of 1's to 0's in the data that we know
+(prob <- tab1[[2]]/(tab1[[1]] + tab1[[2]]))
+```
+
+```{r, message = FALSE, warning = FALSE}
+#impute the missing values
+cats <- if_else(is.na(cats), rbinom(1,1,prob), cats)
+```
+
+```{r, message = FALSE, warning = FALSE}
+toll <- as.numeric(0) #initialize a vector
+#compare the conterfactual to the imputed data
+for(i in seq_along(cats_all)) {
+  toll[[i]] <- if_else(cats[[i]] == cats_all[[i]], 1, 0) 
+}
+```
+
+```{r, message = FALSE, warning = FALSE}
+# number of misses after imputation
+sum(toll == 0)
+#accuracy of the imputation
+acc  <- 1 - (sum(toll == 0)/length(cats_all))
+```
+
+```{r, message = FALSE, warning = FALSE}
+accuracy <- function(n, prop, missing) {
+  set.seed(125)
+  cats <- rbinom(n,1L,prop)
+  cats_all <- cats
+  missings <- round(runif(missing, 1, n))
+  cats[missings] <- NA
+  tab1 <- xtabs(~cats)
+  prob <- tab1[[2]]/(tab1[[1]] + tab1[[2]])
+  cats <- if_else(is.na(cats), rbinom(1,1,prob), cats)
+  toll <- as.numeric(0)
+  for(i in seq_along(cats_all)) {
+    toll[[i]] <- if_else(cats[[i]] == cats_all[[i]], 1, 0) 
+  }
+  acc  <- 1 - (sum(toll == 0)/length(cats_all))
+  return(acc)
+}
+```
+
+```{r, message = FALSE, warning = FALSE}
+n <- rep(10000, 100)
+prop <- rep(0.68, 100)
+missing <- as.integer(round(seq(500, 10000, length.out = 100)))
+df <- data.frame(n = n, prop = prop, missing = missing)
+```
+
+```{r, message = FALSE, warning = FALSE}
+acc <- as.numeric(0)
+miss <- seq(100, 10000, 100)
+
+for(i in 1:100) {
+  j = i * 100
+  acc[i]<- accuracy(10000, 0.10, j)
+  append(acc, acc[i])
+}
+head(acc)
+```
+
+```{r, message = FALSE, warning = FALSE}
+acc_df <- data_frame(acc, miss)
+acc_df$index <- seq(1, nrow(acc_df), 1)
+```
+
+```{r message = FALSE, warning = FALSE, fig.width = 6, fig.height = 4}
+ggplot(acc_df) +
+  geom_line(aes(x =miss, y = acc)) +
+  ggtitle("prop = 0.10")
+```
+```{r message = FALSE, warning = FALSE, fig.width = 6, fig.height = 4}
+for(i in 1:100) {
+  j = i * 100
+  acc[i]<- accuracy(10000, 0.50, j)
+  append(acc, acc[i])
+}
+acc_df <- data_frame(acc, miss)
+acc_df$index <- seq(1, nrow(acc_df), 1)
+
+ggplot(acc_df) +
+  geom_line(aes(x =miss, y = acc)) +
+ggtitle("prop = 0.50")
+```
+
+```{r message = FALSE, warning = FALSE, fig.width = 6, fig.height = 4}
+for(i in 1:100) {
+  j = i * 100
+  acc[i]<- accuracy(10000, 0.99, j)
+  append(acc, acc[i])
+}
+acc_df <- data_frame(acc, miss)
+acc_df$index <- seq(1, nrow(acc_df), 1)
+
+ggplot(acc_df) +
+  geom_line(aes(x =miss, y = acc)) +
+ggtitle("prop = 0.99")
+```
+
+
+```{r, message = FALSE, warning = FALSE}
+plotacc <- function(prop) {
+for(i in 1:100) {
+  j = i * 100
+  acc[i]<- accuracy(10000, prop, j)
+  append(acc, acc[i])
+}
+acc_df <- data_frame(acc, miss)
+acc_df$index <- seq(1, nrow(acc_df), 1)
+
+title_prop <- paste("prop = ", prop)
+ggplot(acc_df) +
+  geom_line(aes(x =miss, y = acc)) +
+  ggtitle(title_prop)
+}
+```
+
+```{r, message = FALSE, warning = FALSE}
+plotacc(.85)
+```
+
+
+
+
+
+
+
