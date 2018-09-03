@@ -5,62 +5,73 @@ date: "September 1, 2018"
 output: html_document
 ---
 
-This post is an extension of my previous posts on random imputation:
-[Random Imputation](https://epi2020datascience.blogspot.com/2018/01/)
-[Random vs MICE Immputation](https://epi2020datascience.blogspot.com/2018/07/)
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+This post is an extension of my previous posts on random imputation:
+[Random Imputation](https://epi2020datascience.blogspot.com/2018/01/)
+[Random vs MICE Immputation](https://epi2020datascience.blogspot.com/2018/07/) <br>
+
 
 ```{r, message = FALSE, warning = FALSE}
 library(tidyverse)
 set.seed(125)
 ```
 
+First, simulate some categorical data(a vector of 0's and 1's), with a proportion of 68% (or any other proportion) 1's. Then save the original intact data to be compared later with the same data, but with missing values. The saved data is in effect the counterfactuals, the actual data that we never really know when presented with a dataset containing missing values. 
 ```{r, message = FALSE, warning = FALSE}
 cats <- rbinom(10000,1,.68)
 cats_all <- cats #save the original intact data - the counterfactuals
 ```
 
+Now, replace 6000 data with missing values (NA's). The actual number of NA's will be less than the requested amount because there will be some duplicate values produced by the random generator.
+
 ```{r, message = FALSE, warning = FALSE}
-missings <- round(runif(6000, 1, 10000))
-cats[missings] <- NA
-sum(is.na(cats)) # number of NA's in cats
-#cats now represents original data that
-#we would be presented with with missing values
+missings <- round(runif(2000, 1, 10000)) #the indices of the missing values
+cats[missings] <- NA #replace the known data with missing values
+sum(is.na(cats)) #total number of NA's
 ```
 
+Subset the data into 0's and 1's with a table
 ```{r, message = FALSE, warning = FALSE}
 (tab1 <- xtabs(~cats))
 tab1[[1]]
 tab1[[2]]
 ```
 
+Calculate the proportion of 1's to 0's
 ```{r, message = FALSE, warning = FALSE}
 #the proportion of 1's to 0's in the data that we know
-(prob <- tab1[[2]]/(tab1[[1]] + tab1[[2]]))
+prob <- tab1[[2]]/(tab1[[1]] + tab1[[2]])
+paste0("The proportion of 1's to 0's is: ", round(prob, 2))
 ```
 
+Replace the missing values using random imputation with binomial distribution.
 ```{r, message = FALSE, warning = FALSE}
 #impute the missing values
 cats <- if_else(is.na(cats), rbinom(1,1,prob), cats)
 ```
 
+Compare each value in the imputed data to its counterpart in the original intact data.
 ```{r, message = FALSE, warning = FALSE}
 toll <- as.numeric(0) #initialize a vector
-#compare the conterfactual to the imputed data
+#compare the conterfactual to the imputed data, 0 = a miss
 for(i in seq_along(cats_all)) {
   toll[[i]] <- if_else(cats[[i]] == cats_all[[i]], 1, 0) 
 }
 ```
 
+How accurate was the imputation compared to the counterfactuals?
 ```{r, message = FALSE, warning = FALSE}
 # number of misses after imputation
-sum(toll == 0)
+paste(sum(toll == 0), "misses")
 #accuracy of the imputation
 acc  <- 1 - (sum(toll == 0)/length(cats_all))
+paste0("The accuracy of the categorical imputation was: ", acc)
 ```
 
+Translate the above into a function:
 ```{r, message = FALSE, warning = FALSE}
 accuracy <- function(n, prop, missing) {
   set.seed(125)
@@ -80,64 +91,7 @@ accuracy <- function(n, prop, missing) {
 }
 ```
 
-```{r, message = FALSE, warning = FALSE}
-n <- rep(10000, 100)
-prop <- rep(0.68, 100)
-missing <- as.integer(round(seq(500, 10000, length.out = 100)))
-df <- data.frame(n = n, prop = prop, missing = missing)
-```
-
-```{r, message = FALSE, warning = FALSE}
-acc <- as.numeric(0)
-miss <- seq(100, 10000, 100)
-
-for(i in 1:100) {
-  j = i * 100
-  acc[i]<- accuracy(10000, 0.10, j)
-  append(acc, acc[i])
-}
-head(acc)
-```
-
-```{r, message = FALSE, warning = FALSE}
-acc_df <- data_frame(acc, miss)
-acc_df$index <- seq(1, nrow(acc_df), 1)
-```
-
-```{r message = FALSE, warning = FALSE, fig.width = 6, fig.height = 4}
-ggplot(acc_df) +
-  geom_line(aes(x =miss, y = acc)) +
-  ggtitle("prop = 0.10")
-```
-```{r message = FALSE, warning = FALSE, fig.width = 6, fig.height = 4}
-for(i in 1:100) {
-  j = i * 100
-  acc[i]<- accuracy(10000, 0.50, j)
-  append(acc, acc[i])
-}
-acc_df <- data_frame(acc, miss)
-acc_df$index <- seq(1, nrow(acc_df), 1)
-
-ggplot(acc_df) +
-  geom_line(aes(x =miss, y = acc)) +
-ggtitle("prop = 0.50")
-```
-
-```{r message = FALSE, warning = FALSE, fig.width = 6, fig.height = 4}
-for(i in 1:100) {
-  j = i * 100
-  acc[i]<- accuracy(10000, 0.99, j)
-  append(acc, acc[i])
-}
-acc_df <- data_frame(acc, miss)
-acc_df$index <- seq(1, nrow(acc_df), 1)
-
-ggplot(acc_df) +
-  geom_line(aes(x =miss, y = acc)) +
-ggtitle("prop = 0.99")
-```
-
-
+Also, create a function to plot the accuracy with different proportions of 0's and 1's, and with different amounts of missing values.
 ```{r, message = FALSE, warning = FALSE}
 plotacc <- function(prop) {
 for(i in 1:100) {
@@ -145,20 +99,52 @@ for(i in 1:100) {
   acc[i]<- accuracy(10000, prop, j)
   append(acc, acc[i])
 }
+miss <- seq(100, 10000, 100)
 acc_df <- data_frame(acc, miss)
 acc_df$index <- seq(1, nrow(acc_df), 1)
 
 title_prop <- paste("prop = ", prop)
 ggplot(acc_df) +
-  geom_line(aes(x =miss, y = acc)) +
-  ggtitle(title_prop)
+  geom_line(aes(x =miss, y = acc), color = "blue") +
+  ggtitle(title_prop) +
+  ylab("Imputation Accuracy") +
+  xlab("Number of Missing Data")
 }
 ```
 
-```{r, message = FALSE, warning = FALSE}
-plotacc(.85)
+Now let's plot 10000 data varying the proportion of 1's and the total number of missing data. We'll start right in the middle at prop = 0.50.
+```{r message = FALSE, warning = FALSE, fig.width = 5, fig.height = 3}
+plotacc(0.50)
 ```
 
+This method has a peculiar property in that as we vary the proportion of 0's and 1's away from 0.50, there appear non-periodic negative spikes which increase in amplitude and decrease in frequency as we approach 1.00 and 0.00. The trend also becomes more horizontal with progression away from 0.50.
+
+```{r message = FALSE, warning = FALSE, fig.width = 5, fig.height = 3}
+plotacc(.55)
+plotacc(.60)
+plotacc(.70)
+plotacc(.80)
+plotacc(.90)
+plotacc(.99)
+```
+
+Now going in the opposite direction:
+```{r message = FALSE, warning = FALSE, fig.width = 5, fig.height = 3}
+plotacc(.45)
+plotacc(.40)
+plotacc(.30)
+plotacc(.20)
+plotacc(.10)
+plotacc(.01)
+```
+
+I don't have an explanation for the spikes. Their frequency seems to be random. Perhaps someone would like to comment on their origin.
+
+This method appears to be a highly accurate method for imputing categorical missing data, especially when we are dealing with 30% or less missing data. Granted that a fair coin toss should give around 50% accuracy over the long term, but random imputation may be acceptable for imputation in many situations.
+
+```{r, message = FALSE, warning = FALSE}
+sessionInfo()
+```
 
 
 
